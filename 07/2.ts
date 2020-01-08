@@ -47,9 +47,11 @@ function* runProgram (tape:number[]) {
 	    break;
 
 	case INPUT:
-	    console.log('Waiting for input');
+	    debug('Waiting for input');
+	    yield "INPUT";
+	    debug('got input');
 	    const input = yield;
-	    console.log('Input', input);
+	    debug('Input', input);
 	    if(typeof input != 'number'){
 		throw new Error(`No input available`);
 	    }
@@ -58,7 +60,8 @@ function* runProgram (tape:number[]) {
 	    break;
 
 	case OUTPUT:
-	    console.log('Outputing', tape[tape[pc+1]]);
+	    debug('Outputing', tape[tape[pc+1]]);
+	    yield "OUTPUT";
 	    yield tape[tape[pc+1]];
 	    pc += 2;
 	    break;
@@ -120,6 +123,11 @@ const permute = (input: number[], values: number[]): number[][] => {
     
 const orders = permute([], [6,7,8,9,5]);
 
+const debug = (...params:any) => {
+
+    // console.log(...params)
+}
+
 console.log(orders.map(order => {
     const machines = order.map(i => {
 	const runtime = runProgram(inputTape);
@@ -128,6 +136,9 @@ console.log(orders.map(order => {
 	return {
 	    runtime,
 	    inputs,
+	    lastOutput: 0,
+	    waitingOnInput: false,
+	    done: false,
 	}
     })
 
@@ -135,44 +146,71 @@ console.log(orders.map(order => {
 
     let finalOutput = 0;
 
-    machines.forEach(i => i.runtime.next())
-    
     let limitter = 0;
-    const limit = 100;
-    while(limitter < limit && finalOutput == 0){
+    const limit = 10000;
+    while(limitter < limit && !machines[4].done){
 	limitter ++;
 
 	machines.forEach((machine, i) => {
-	    console.log(machines.map(i => i.inputs));
-	    const nextInput = machine.inputs.shift()
-	    console.log(`Executing machine ${i}, next input ${nextInput}`);
-    	    let nextFrame = machine.runtime.next(nextInput);
-	    console.log(nextFrame);
-	    if(typeof nextFrame.value == 'number'){
-		const setMachineIndex = i === machines.length - 1 ? 0: i + 1;
-		console.log(`Setting output to machine ${setMachineIndex}`);
-		machines[setMachineIndex].inputs.push(nextFrame.value);
-		machine.runtime.next();
+	    debug(machines.map(i => i.inputs));
+	    debug('')
+
+	    let nextOp: IteratorResult<number | "INPUT" | "OUTPUT" | undefined, void> = {
+		value: undefined,
+		done: false,
+	    };
+		
+	    if(machine.waitingOnInput && machine.inputs.length) {
+		const nextInput = machine.inputs.shift()
+		debug('1', machine.runtime.next());
+		debug(`Providing input ${nextInput}`);
+    		nextOp = machine.runtime.next(nextInput);
+		machine.waitingOnInput = false;
 	    }
 
-	    if(nextFrame.done){
-		machine.inputs.push(nextInput || 0);
-		if(i === machines.length - 1){
-		    const machine0LastInput = machines[0].inputs.shift()
-		    if( typeof machine0LastInput === "undefined"){
-			throw new Error("Finished with no Ouput");
-		    }
-		finalOutput = machine0LastInput;
+    
+	    while(!machine.waitingOnInput && !machine.done){
+
+		debug(nextOp, machine.inputs);
+
+		if (nextOp.value === "INPUT") {
+		    if(machine.inputs.length === 0){
+			machine.waitingOnInput = true;
+			break;
+		    };
+		    const nextInput = machine.inputs.shift()
+		    debug('1', machine.runtime.next());
+		    debug(`Providing input ${nextInput}`);
+    		    nextOp =  machine.runtime.next(nextInput);
+		    continue;
 		}
+
+		if (nextOp.value === "OUTPUT"){
+		    debug('GOT OUTPUT');
+		    const nextFrame = machine.runtime.next();
+		    debug(nextFrame);
+		    if(typeof nextFrame.value == 'number'){
+			machine.lastOutput = nextFrame.value;
+			const setMachineIndex = i === machines.length - 1 ? 0: i + 1;
+			debug(`Setting output to machine ${setMachineIndex}`);
+			machines[setMachineIndex].inputs.push(nextFrame.value);
+		    }
+		}
+		
+		if(nextOp.done){
+		    machine.done = true;
+		    return;
+		}
+
+		nextOp =  machine.runtime.next();
 	    }
-	    console.log('')
 	})
     }
 
     if(limitter == limit){
-	throw new Error('Hit execution limit')
+	throw new Error(`Hit execution limit ${limit}`)
     }
 
-    return finalOutput;
+    return machines[4].lastOutput;
 }).reduce((a,b) => Math.max(a,b), 0))
 
