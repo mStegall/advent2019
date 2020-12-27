@@ -2,7 +2,7 @@ import { readFileSync} from "fs"
 import { exit, stdout } from "process"
 import {emitKeypressEvents} from 'readline'
 
-const input = readFileSync("./input.txt").toString();
+const input = readFileSync("./15/input.txt").toString();
 
 const FINISH = 99;
 const ADD = 1;
