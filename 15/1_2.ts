@@ -89,6 +89,8 @@ async function main() {
 				y += (direction == 'up' ? -1 : direction == 'down' ? 1 : 0);
 				ox = x;
 				oy = y;
+				screen[x][y] = true
+
 				stdout.write(`\x1b[${y};${x}HO`);
 			}
 
@@ -119,29 +121,49 @@ async function main() {
 		throw new Error("didn't find oxygen")
 	}
 
-	let candidates: [number, number][] = [[ox, oy]]
+	let candidates: [number, number][] = [[25,25]]
+	const distance: {
+		[key: number]: {
+			[key: number]: number
+		},
+	} = {}
+	
+	for (let i = 0; i < 50; i++) {
+		distance[i] = {}
+	}
+	
+	distance[25][25] = 0;
 
-	while (candidates.length > 0) {
-		stdout.write(`\x1b[100;100H${count}`);
-
+	await sleep(1000)
+	while (distance[ox][oy] == undefined) {
+		// stdout.write(`\x1b[2J`);
 		let newCandidates: [number, number][] = []
 
 		candidates.forEach(([x, y]) => {
+			const currentDistance = distance[x][y];
+			
 			[[0, 1], [0, -1], [1, 0], [-1, 0]].forEach(([dx, dy]) => {
-				if (screen[x + dx][y + dy]) {
-					screen[x + dx][y + dy] = false
-					newCandidates.push([x + dx, y + dy])
-					stdout.write(`\x1b[${y + dy};${x + dx}HO`);
+				const tx = x +dx
+				const ty = y + dy
+				// cell is not a wall
+				if (screen[tx][ty]) {
+					if(distance[tx][ty] == undefined){
+						distance[tx][ty] = currentDistance +1
+						newCandidates.push([tx,ty])
+						stdout.write(`\x1b[${ty};${tx}H${(currentDistance + 1) % 10}`);
+						
+					}
 				}
 			})
 		})
 
 		candidates = newCandidates
-
-		count++
-
-		await sleep(25)
+		
+		await sleep(100)
 	}
+	stdout.write(`\x1b[H`);
+
+	console.log(distance[ox][oy])
 }
 
 main();
